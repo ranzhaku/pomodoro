@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ポモドーロタイマー</title>
+
+  <!-- PWA対応 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ff6347">
+
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 80px;
+      background: #fff;
+    }
+    #time {
+      font-size: 64px;
+      margin: 20px;
+    }
+    #mode {
+      font-size: 24px;
+      margin: 10px;
+    }
+    #count {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+    #hint {
+      margin-top: 15px;
+      font-size: 14px;
+      color: #555;
+    }
+    button {
+      font-size: 18px;
+      padding: 10px 20px;
+      margin: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🍅 ポモドーロタイマー</h1>
+
+  <div id="mode">作業時間</div>
+  <div id="time">25:00</div>
+
+  <button onclick="toggleTimer()">スタート / 一時停止</button>
+  <button onclick="resetTimer()">リセット</button>
+
+  <div id="count">完了したポモドーロ：0 回</div>
+  <div id="hint">⌨ Space：開始/停止 ｜ R：リセット</div>
+
+  <script>
+    const WORK_TIME = 25 * 60;
+    const SHORT_BREAK = 5 * 60;
+    const LONG_BREAK = 20 * 60;
+
+    let totalSeconds = WORK_TIME;
+    let timer = null;
+    let isWorkTime = true;
+    let pomodoroCount = 0;
+
+    // 🔔 音＋バイブ
+    function playBeep() {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      gainNode.gain.value = 0.2;
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.4);
+
+      // 📳 バイブ
+      if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+    }
+
+    function updateDisplay() {
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      document.getElementById("time").textContent =
+        `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    }
+
+    function startTimer() {
+      if (timer) return;
+
+      timer = setInterval(() => {
+        totalSeconds--;
+        updateDisplay();
+
+        if (totalSeconds <= 0) {
+          clearInterval(timer);
+          timer = null;
+
+          playBeep();
+
+          if (isWorkTime) {
+            pomodoroCount++;
+            localStorage.setItem("pomodoroCount", pomodoroCount);
+
+            document.getElementById("count").textContent =
+              `完了したポモドーロ：${pomodoroCount} 回`;
+
+            isWorkTime = false;
+
+            if (pomodoroCount % 4 === 0) {
+              totalSeconds = LONG_BREAK;
+              document.getElementById("mode").textContent = "長休憩";
+            } else {
+              totalSeconds = SHORT_BREAK;
+              document.getElementById("mode").textContent = "休憩時間";
+            }
+          } else {
+            isWorkTime = true;
+            totalSeconds = WORK_TIME;
+            document.getElementById("mode").textContent = "作業時間";
+          }
+
+          updateDisplay();
+          startTimer();
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      clearInterval(timer);
+      timer = null;
+    }
+
+    function toggleTimer() {
+      if (timer) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    }
+
+    function resetTimer() {
+      clearInterval(timer);
+      timer = null;
+      isWorkTime = true;
+      totalSeconds = WORK_TIME;
+      document.getElementById("mode").textContent = "作業時間";
+      updateDisplay();
+    }
+
+    // ⌨ キー操作
+    document.addEventListener("keydown", (e) => {
+      if (e.repeat) return;
+
+      if (e.key === " ") {
+        e.preventDefault();
+        toggleTimer();
+      } else if (e.key.toLowerCase() === "r") {
+        resetTimer();
+      }
+    });
+
+    // 📊 データ復元
+    window.onload = () => {
+      const saved = localStorage.getItem("pomodoroCount");
+      if (saved) {
+        pomodoroCount = parseInt(saved);
+        document.getElementById("count").textContent =
+          `完了したポモドーロ：${pomodoroCount} 回`;
+      }
+      updateDisplay();
+    };
+
+    // 🔒 画面スリープ防止
+    let wakeLock = null;
+    async function keepScreenOn() {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {}
+    }
+    document.addEventListener("click", keepScreenOn);
+
+    // 📦 Service Worker登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+</body>
+</html>
