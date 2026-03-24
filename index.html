@@ -2,46 +2,69 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+
+  <!-- スマホ最適化（重要） -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ff6347">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
   <title>ポモドーロタイマー</title>
 
-  <!-- PWA対応 -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#ff6347">
 
   <style>
     body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
       font-family: sans-serif;
-      text-align: center;
-      margin-top: 80px;
       background: #fff;
     }
-    #time {
-      font-size: 64px;
-      margin: 20px;
+
+    h1 {
+      font-size: 6vw;
+      margin-bottom: 10px;
     }
+
     #mode {
-      font-size: 24px;
+      font-size: 5vw;
       margin: 10px;
     }
+
+    #time {
+      font-size: 20vw; /* 画面いっぱい */
+      font-weight: bold;
+      margin: 10px;
+    }
+
+    button {
+      font-size: 5vw;
+      padding: 12px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 10px;
+      background: #ff6347;
+      color: white;
+    }
+
     #count {
       margin-top: 20px;
-      font-size: 18px;
+      font-size: 4vw;
     }
+
     #hint {
-      margin-top: 15px;
-      font-size: 14px;
-      color: #555;
-    }
-    button {
-      font-size: 18px;
-      padding: 10px 20px;
-      margin: 5px;
+      margin-top: 10px;
+      font-size: 3vw;
+      color: #666;
     }
   </style>
 </head>
 
 <body>
-  <h1>🍅 ポモドーロタイマー</h1>
+  <h1>🍅 Pomodoro</h1>
 
   <div id="mode">作業時間</div>
   <div id="time">25:00</div>
@@ -50,7 +73,7 @@
   <button onclick="resetTimer()">リセット</button>
 
   <div id="count">完了したポモドーロ：0 回</div>
-  <div id="hint">⌨ Space：開始/停止 ｜ R：リセット</div>
+  <div id="hint">Space：開始/停止 ｜ R：リセット</div>
 
   <script>
     const WORK_TIME = 25 * 60;
@@ -78,7 +101,6 @@
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.4);
 
-      // 📳 バイブ
       if (navigator.vibrate) {
         navigator.vibrate(200);
       }
@@ -154,7 +176,6 @@
       updateDisplay();
     }
 
-    // ⌨ キー操作
     document.addEventListener("keydown", (e) => {
       if (e.repeat) return;
 
@@ -166,7 +187,7 @@
       }
     });
 
-    // 📊 データ復元
+    // 📊 保存データ読み込み
     window.onload = () => {
       const saved = localStorage.getItem("pomodoroCount");
       if (saved) {
@@ -177,7 +198,7 @@
       updateDisplay();
     };
 
-    // 🔒 画面スリープ防止
+    // 🔒 スリープ防止
     let wakeLock = null;
     async function keepScreenOn() {
       try {
@@ -186,7 +207,7 @@
     }
     document.addEventListener("click", keepScreenOn);
 
-    // 📦 Service Worker登録
+    // 📦 Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js');
     }
