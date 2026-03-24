@@ -3,13 +3,11 @@
 <head>
   <meta charset="UTF-8">
 
-  <!-- スマホ最適化（重要） -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#ff6347">
   <meta name="apple-mobile-web-app-capable" content="yes">
 
   <title>ポモドーロタイマー</title>
-
   <link rel="manifest" href="manifest.json">
 
   <style>
@@ -24,41 +22,24 @@
       background: #fff;
     }
 
-    h1 {
-      font-size: 6vw;
-      margin-bottom: 10px;
-    }
+    h1 { font-size: 6vw; }
 
-    #mode {
-      font-size: 5vw;
-      margin: 10px;
-    }
-
-    #time {
-      font-size: 20vw; /* 画面いっぱい */
-      font-weight: bold;
-      margin: 10px;
-    }
+    #mode { font-size: 5vw; }
+    #time { font-size: 20vw; font-weight: bold; }
 
     button {
       font-size: 5vw;
       padding: 12px 20px;
       margin: 5px;
-      border: none;
       border-radius: 10px;
+      border: none;
       background: #ff6347;
       color: white;
     }
 
-    #count {
-      margin-top: 20px;
-      font-size: 4vw;
-    }
-
-    #hint {
+    #count, #weekCount {
       margin-top: 10px;
-      font-size: 3vw;
-      color: #666;
+      font-size: 4vw;
     }
   </style>
 </head>
@@ -72,8 +53,8 @@
   <button onclick="toggleTimer()">スタート / 一時停止</button>
   <button onclick="resetTimer()">リセット</button>
 
-  <div id="count">完了したポモドーロ：0 回</div>
-  <div id="hint">Space：開始/停止 ｜ R：リセット</div>
+  <div id="count">今日：0回</div>
+  <div id="weekCount">今週：0回</div>
 
   <script>
     const WORK_TIME = 25 * 60;
@@ -85,32 +66,85 @@
     let isWorkTime = true;
     let pomodoroCount = 0;
 
-    // 🔔 音＋バイブ
+    // 🔓 音アンロック
+    let audioUnlocked = false;
+    function unlockAudio() {
+      if (audioUnlocked) return;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ctx.destination);
+      src.start(0);
+      audioUnlocked = true;
+    }
+    document.addEventListener("touchstart", unlockAudio, { once: true });
+    document.addEventListener("click", unlockAudio, { once: true });
+
     function playBeep() {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
 
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      gainNode.gain.value = 0.2;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
+      osc.frequency.value = 880;
+      gain.gain.value = 0.3;
 
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
 
-      if (navigator.vibrate) {
-        navigator.vibrate(200);
-      }
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+
+      if (navigator.vibrate) navigator.vibrate(200);
+    }
+
+    // 📅 今日キー
+    function getTodayKey() {
+      const d = new Date();
+      return `pomodoro-${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    }
+
+    // 📅 月曜開始の週キー
+    function getWeekKey() {
+      const d = new Date();
+      const day = d.getDay(); // 0=日曜
+      const diff = (day === 0 ? -6 : 1 - day); // 月曜に戻す
+
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + diff);
+
+      return `week-${monday.getFullYear()}-${monday.getMonth()}-${monday.getDate()}`;
     }
 
     function updateDisplay() {
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
       document.getElementById("time").textContent =
-        `${minutes}:${seconds.toString().padStart(2, "0")}`;
+        `${m}:${s.toString().padStart(2, "0")}`;
+    }
+
+    function updateCounts() {
+      const today = localStorage.getItem(getTodayKey()) || 0;
+      const week = localStorage.getItem(getWeekKey()) || 0;
+
+      document.getElementById("count").textContent = `今日：${today}回`;
+      document.getElementById("weekCount").textContent = `今週：${week}回`;
+    }
+
+    function addCount() {
+      // 今日
+      let today = parseInt(localStorage.getItem(getTodayKey()) || 0);
+      today++;
+      localStorage.setItem(getTodayKey(), today);
+
+      // 週
+      let week = parseInt(localStorage.getItem(getWeekKey()) || 0);
+      week++;
+      localStorage.setItem(getWeekKey(), week);
+
+      updateCounts();
     }
 
     function startTimer() {
@@ -127,21 +161,16 @@
           playBeep();
 
           if (isWorkTime) {
-            pomodoroCount++;
-            localStorage.setItem("pomodoroCount", pomodoroCount);
-
-            document.getElementById("count").textContent =
-              `完了したポモドーロ：${pomodoroCount} 回`;
-
+            addCount();
             isWorkTime = false;
 
-            if (pomodoroCount % 4 === 0) {
-              totalSeconds = LONG_BREAK;
-              document.getElementById("mode").textContent = "長休憩";
-            } else {
-              totalSeconds = SHORT_BREAK;
-              document.getElementById("mode").textContent = "休憩時間";
-            }
+            totalSeconds =
+              (parseInt(localStorage.getItem(getTodayKey()) || 0) % 4 === 0)
+                ? LONG_BREAK
+                : SHORT_BREAK;
+
+            document.getElementById("mode").textContent =
+              totalSeconds === LONG_BREAK ? "長休憩" : "休憩時間";
           } else {
             isWorkTime = true;
             totalSeconds = WORK_TIME;
@@ -154,14 +183,10 @@
       }, 1000);
     }
 
-    function pauseTimer() {
-      clearInterval(timer);
-      timer = null;
-    }
-
     function toggleTimer() {
       if (timer) {
-        pauseTimer();
+        clearInterval(timer);
+        timer = null;
       } else {
         startTimer();
       }
@@ -176,38 +201,12 @@
       updateDisplay();
     }
 
-    document.addEventListener("keydown", (e) => {
-      if (e.repeat) return;
-
-      if (e.key === " ") {
-        e.preventDefault();
-        toggleTimer();
-      } else if (e.key.toLowerCase() === "r") {
-        resetTimer();
-      }
-    });
-
-    // 📊 保存データ読み込み
     window.onload = () => {
-      const saved = localStorage.getItem("pomodoroCount");
-      if (saved) {
-        pomodoroCount = parseInt(saved);
-        document.getElementById("count").textContent =
-          `完了したポモドーロ：${pomodoroCount} 回`;
-      }
       updateDisplay();
+      updateCounts();
     };
 
-    // 🔒 スリープ防止
-    let wakeLock = null;
-    async function keepScreenOn() {
-      try {
-        wakeLock = await navigator.wakeLock.request('screen');
-      } catch (err) {}
-    }
-    document.addEventListener("click", keepScreenOn);
-
-    // 📦 Service Worker
+    // Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js');
     }
